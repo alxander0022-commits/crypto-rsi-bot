@@ -1,0 +1,15 @@
+# local logs
+bot.log
+news.log
+news_log.txt
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# NOTE: state.json and ledger.csv are intentionally NOT ignored.
+# The GitHub Action commits them back so your position + paper record
+# persist across hourly runs. If you run only locally, you can add them
+# here to keep them out of git.

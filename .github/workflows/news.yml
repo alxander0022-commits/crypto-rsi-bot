@@ -1,0 +1,28 @@
+name: 12h-macro-news
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"   # every 12 hours (00:00 and 12:00 UTC)
+  workflow_dispatch: {}
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: rsi-bot-news
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run 12h report (Fear & Greed)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot.py news

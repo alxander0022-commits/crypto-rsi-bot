@@ -1,0 +1,43 @@
+name: hourly-rsi-alert
+
+on:
+  schedule:
+    # Every hour at :05. GitHub cron is UTC and can be delayed a few minutes
+    # under load — fine for an hourly strategy.
+    - cron: "5 * * * *"
+  workflow_dispatch: {}   # lets you trigger a run manually from the Actions tab
+
+# Needed so the job can commit state.json + ledger.csv back to the repo,
+# which is how position/ledger persist between runs on ephemeral runners.
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: rsi-bot        # never run two checks at once
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run hourly check
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot.py run
+
+      - name: Persist state & ledger
+        run: |
+          git config user.name "rsi-bot"
+          git config user.email "rsi-bot@users.noreply.github.com"
+          git add state.json ledger.csv
+          git commit -m "run $(date -u +%FT%TZ)" || echo "nothing to commit"
+          git push
