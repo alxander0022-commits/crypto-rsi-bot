@@ -25,6 +25,9 @@ RSI_SELL         = 70            # DOWNTREND + RSI crosses back down through thi
 # BACK through it (the extreme is rolling over) — avoids acting while a spike is
 # still running. Set False for the simple "RSI is beyond the level" trigger.
 CONFIRM_REVERSAL = True
+# Heads-up: warn "setup building" when RSI is within this many points of the
+# level (in the right trend) but hasn't triggered yet.
+SETUP_WARN       = 5
 MA_FAST          = 50            # fast moving average (periods)
 MA_SLOW          = 200           # slow moving average (periods)
 ADX_PERIOD       = 14

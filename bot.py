@@ -115,6 +115,18 @@ def decide_signal(direction, rsi_prev, rsi):
     return "NONE"
 
 
+def setup_note(direction, rsi, signal):
+    """A '⚠️ setup building' heads-up when a coin is within SETUP_WARN of the
+    trigger level (in the right trend) but hasn't fired yet."""
+    if signal != "NONE":
+        return ""
+    if direction == "DOWNTREND" and rsi >= config.RSI_SELL - config.SETUP_WARN:
+        return " ⚠️ SELL setup building"
+    if direction == "UPTREND" and rsi <= config.RSI_BUY + config.SETUP_WARN:
+        return " ⚠️ BUY setup building"
+    return ""
+
+
 # ─── position actions ─────────────────────────────────────────────────
 def do_buy(state, symbol, price):
     pos = state_mod.get_pos(state, symbol)
@@ -216,10 +228,11 @@ def evaluate_symbol(state, symbol):
                    direction, round(adx, 1), signal, ACTION_WORD[signal]])
 
     short = symbol.replace("USDT", "")
+    note = setup_note(direction, rsi, signal)
     return {
-        "sentence": f"{short} — trend {TREND_WORD[direction]}, RSI {rsi:.0f} → {VERDICT[signal]}",
+        "sentence": f"{short} — trend {TREND_WORD[direction]}, RSI {rsi:.0f} → {VERDICT[signal]}{note}",
         "console": f"{symbol} ${fmt(price)} | RSI {rsi:.1f} | {direction} "
-                   f"(ADX {adx:.1f}) | {signal}",
+                   f"(ADX {adx:.1f}) | {signal}{note}",
     }
 
 
@@ -264,7 +277,8 @@ def cmd_snapshot():
             price, rsi_prev, rsi, direction, adx = read_market(symbol)
             signal = decide_signal(direction, rsi_prev, rsi)
             short = symbol.replace("USDT", "")
-            lines.append(f"{short} — trend {TREND_WORD[direction]}, RSI {rsi:.0f} → {VERDICT[signal]}")
+            note = setup_note(direction, rsi, signal)
+            lines.append(f"{short} — trend {TREND_WORD[direction]}, RSI {rsi:.0f} → {VERDICT[signal]}{note}")
         except Exception as e:
             lines.append(f"{symbol.replace('USDT', '')} — data error")
     fg = fng_line()

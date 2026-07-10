@@ -54,8 +54,11 @@ stay out. Trend direction:
 > Lower `RSI_SELL` (e.g. 70) if you want more.
 
 ### Example messages
+A coin close to (but not yet at) a trigger shows a `⚠️ setup building` heads-up
+(within `SETUP_WARN` points of the level, in the right trend).
+
 ```
-BTC — trend DOWN, RSI 33 → ⛔ stay out
+BTC — trend DOWN, RSI 68 → ⛔ stay out ⚠️ SELL setup building
 ETH — trend DOWN, RSI 34 → ⛔ stay out
 SOL — trend UP, RSI 27 → 🟢 time to BUY
 Fear & Greed: 20/100 — Extreme Fear 😱
