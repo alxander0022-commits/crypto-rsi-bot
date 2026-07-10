@@ -18,6 +18,13 @@ def latest_rsi(df_1h):
     return float(rsi.iloc[-1])
 
 
+def latest_rsi_pair(df_1h):
+    """RSI(14) on the 1-hour timeframe: (previous value, latest value).
+    Used to detect the reversal crossover through the buy/sell level."""
+    rsi = RSIIndicator(close=df_1h["close"], window=config.RSI_PERIOD).rsi()
+    return float(rsi.iloc[-2]), float(rsi.iloc[-1])
+
+
 def trend_state(df_trend):
     """
     Determine trend on the trend timeframe (default daily).

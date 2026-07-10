@@ -82,13 +82,37 @@ def fng_line():
 
 
 def read_market(symbol):
-    """Fetch + compute for one symbol. Returns (price, rsi, direction, adx)."""
+    """Fetch + compute for one symbol.
+    Returns (price, rsi_prev, rsi, direction, adx)."""
     df_1h = data.get_klines(symbol, config.ENTRY_TIMEFRAME, config.CATEGORY, config.KLINE_LIMIT)
     df_trend = data.get_klines(symbol, config.TREND_TIMEFRAME, config.CATEGORY, config.KLINE_LIMIT)
     price = float(df_1h["close"].iloc[-1])
-    rsi = indicators.latest_rsi(df_1h)
+    rsi_prev, rsi = indicators.latest_rsi_pair(df_1h)
     direction, adx, _, _, _ = indicators.trend_state(df_trend)
-    return price, rsi, direction, adx
+    return price, rsi_prev, rsi, direction, adx
+
+
+def decide_signal(direction, rsi_prev, rsi):
+    """BUY / SELL / NONE for one coin.
+
+    With CONFIRM_REVERSAL, only fire when RSI has crossed BACK through the level
+    (the extreme is rolling over):
+      UPTREND   + RSI crosses up   through RSI_BUY   -> BUY
+      DOWNTREND + RSI crosses down through RSI_SELL  -> SELL
+    Otherwise use the simple "RSI is beyond the level" trigger.
+    """
+    if config.CONFIRM_REVERSAL:
+        if direction == "UPTREND" and rsi_prev < config.RSI_BUY <= rsi:
+            return "BUY"
+        if direction == "DOWNTREND" and rsi_prev > config.RSI_SELL >= rsi:
+            return "SELL"
+        return "NONE"
+    # simple level-based
+    if direction == "UPTREND" and rsi < config.RSI_BUY:
+        return "BUY"
+    if direction == "DOWNTREND" and rsi > config.RSI_SELL:
+        return "SELL"
+    return "NONE"
 
 
 # ─── position actions ─────────────────────────────────────────────────
@@ -183,14 +207,8 @@ def evaluate_symbol(state, symbol):
     """Compute one coin's trend + RSI + verdict, log a ledger row, and return
     the one-line sentence for the hourly message."""
     pos = state_mod.get_pos(state, symbol)
-    price, rsi, direction, adx = read_market(symbol)
-
-    if direction == "UPTREND" and rsi < config.RSI_BUY:
-        signal = "BUY"
-    elif direction == "DOWNTREND" and rsi > config.RSI_SELL:
-        signal = "SELL"
-    else:
-        signal = "NONE"
+    price, rsi_prev, rsi, direction, adx = read_market(symbol)
+    signal = decide_signal(direction, rsi_prev, rsi)
 
     pos["last_signal"] = signal
     ts = now_utc().strftime("%Y-%m-%d %H:%M UTC")
@@ -243,13 +261,8 @@ def cmd_snapshot():
     lines = []
     for symbol in config.SYMBOLS:
         try:
-            price, rsi, direction, adx = read_market(symbol)
-            if direction == "UPTREND" and rsi < config.RSI_BUY:
-                signal = "BUY"
-            elif direction == "DOWNTREND" and rsi > config.RSI_SELL:
-                signal = "SELL"
-            else:
-                signal = "NONE"
+            price, rsi_prev, rsi, direction, adx = read_market(symbol)
+            signal = decide_signal(direction, rsi_prev, rsi)
             short = symbol.replace("USDT", "")
             lines.append(f"{short} — trend {TREND_WORD[direction]}, RSI {rsi:.0f} → {VERDICT[signal]}")
         except Exception as e:

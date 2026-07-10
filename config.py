@@ -19,8 +19,12 @@ TREND_TIMEFRAME  = "D"           # trend timeframe. "D" = daily, "240" = 4H
 
 # ─── INDICATORS ───────────────────────────────────────────────────────
 RSI_PERIOD       = 14
-RSI_BUY          = 30            # UPTREND + RSI below this  -> 🟢 BUY the dip
-RSI_SELL         = 80            # DOWNTREND + RSI above this -> 🔴 SELL the top
+RSI_BUY          = 30            # UPTREND + RSI crosses back up through this  -> 🟢 BUY
+RSI_SELL         = 70            # DOWNTREND + RSI crosses back down through this -> 🔴 SELL
+# Confirmation: only signal when RSI has gone past the level and then crossed
+# BACK through it (the extreme is rolling over) — avoids acting while a spike is
+# still running. Set False for the simple "RSI is beyond the level" trigger.
+CONFIRM_REVERSAL = True
 MA_FAST          = 50            # fast moving average (periods)
 MA_SLOW          = 200           # slow moving average (periods)
 ADX_PERIOD       = 14

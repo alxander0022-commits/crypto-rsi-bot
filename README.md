@@ -30,12 +30,20 @@ coin to `ledger.csv` and reads any `/buy` `/sell` commands you sent.
 
 | Trend (daily) | RSI(1h) | Verdict |
 |---|---|---|
-| **UPTREND** | `< RSI_BUY` (30) | 🟢 **time to BUY** |
-| **DOWNTREND** | `> RSI_SELL` (80) | 🔴 **time to SELL** |
+| **UPTREND** | RSI crosses back **up** through `RSI_BUY` (30) | 🟢 **time to BUY** |
+| **DOWNTREND** | RSI crosses back **down** through `RSI_SELL` (70) | 🔴 **time to SELL** |
 | anything else | — | ⛔ **stay out** |
 
-The idea: in an uptrend, oversold dips are buying chances; in a downtrend,
-overbought bounces are selling chances; otherwise stay out. Trend direction:
+**Confirmation (`CONFIRM_REVERSAL = True`):** the signal fires only when RSI has
+gone past the level and then **crossed back through it** — i.e. the extreme is
+rolling over — so you don't act while a spike is still running. It's a discrete
+crossover event: it shows on the hour the cross happens, then reverts to "stay
+out". Set `CONFIRM_REVERSAL = False` for the simpler "RSI is beyond the level"
+trigger.
+
+The idea: in an uptrend, oversold dips that start bouncing are buying chances; in
+a downtrend, overbought bounces that start fading are selling chances; otherwise
+stay out. Trend direction:
 - Price **above** MA200 **and** MA50 **above** MA200 → **UPTREND**
 - Price **below** MA200 **and** MA50 **below** MA200 → **DOWNTREND**
 - anything else → **SIDEWAYS**
@@ -224,8 +232,9 @@ Ready workflows: `.github/workflows/hourly.yml` (the hourly check) and
 | Setting | Default | Meaning |
 |---|---|---|
 | `SYMBOLS` | `[BTCUSDT, ETHUSDT, SOLUSDT]` | Coins to watch — each alerts independently. |
-| `RSI_BUY` | `30` | UPTREND + RSI below this → 🟢 BUY the dip. |
-| `RSI_SELL` | `80` | DOWNTREND + RSI above this → 🔴 SELL the top. Try `70`. |
+| `RSI_BUY` | `30` | Oversold level for the 🟢 BUY crossover (uptrend). |
+| `RSI_SELL` | `70` | Overbought level for the 🔴 SELL crossover (downtrend). |
+| `CONFIRM_REVERSAL` | `True` | Require RSI to cross back through the level (rollover) before signalling. |
 | `TREND_TIMEFRAME` | `D` | Trend timeframe. `D` = daily, `240` = 4H. |
 | `HOURLY_REPORT` | `True` | Send the trend+RSI pulse for all coins every hour. |
 | `REPEAT_ALERTS` | `False` | Re-ping every hour vs only on change. |
