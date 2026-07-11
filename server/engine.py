@@ -77,6 +77,8 @@ class Engine:
             return "paused"
         if self.bybit.mode == "live" and not s["live_confirmed"]:
             return "live mode not confirmed (GO-LIVE required)"
+        if s.get("one_at_a_time") and len(positions) >= 1:
+            return "one-at-a-time: a trade is already open"
         if len(positions) >= int(s["max_positions"]):
             return f"max positions ({s['max_positions']}) reached"
         loss_limit = float(s["max_daily_loss_pct"]) * float(s["allocated_capital"])
@@ -101,29 +103,51 @@ class Engine:
                         f"exchange minimum — skipped.")
             return
 
+        exit_mode = s.get("exit_mode", "split")
         stop_pct = float(s["stop_pct"])
-        arm_pct = float(s["trail_activate_pct"])
-        trail_pct = float(s["trail_distance_pct"])
+        tp_pct = float(s["take_profit_pct"])
         if side == "Buy":
             sl = self.bybit.round_price(symbol, price * (1 - stop_pct))
-            active = self.bybit.round_price(symbol, price * (1 + arm_pct))
+            tp = self.bybit.round_price(symbol, price * (1 + tp_pct))
         else:
             sl = self.bybit.round_price(symbol, price * (1 + stop_pct))
-            active = self.bybit.round_price(symbol, price * (1 - arm_pct))
-        trail_dist = self.bybit.round_price(symbol, price * trail_pct)
+            tp = self.bybit.round_price(symbol, price * (1 - tp_pct))
 
         self.bybit.set_leverage(symbol, "1")
-        self.bybit.market_order(symbol, side, qty, stop_loss=sl)
-        try:
-            self.bybit.set_trailing(symbol, trail_dist, active)
-            trail_txt = f"trailing arms @ ${active} (dist ${trail_dist})"
-        except BybitError as e:
-            trail_txt = f"trailing NOT set ({e}) — fixed stop only"
+        self.bybit.market_order(symbol, side, qty, stop_loss=sl)  # SL always on exchange
+        desc = [f"stop ${sl}"]
 
-        mode = self.bybit.mode.upper()
-        notify.send(f"{'📈' if side == 'Buy' else '📉'} {mode} {side.upper()} "
-                    f"{symbol} qty {qty} @ ~${price:,.2f}\n"
-                    f"stop ${sl} | {trail_txt}")
+        # trailing stop on exchange (trailing & split modes)
+        if exit_mode in ("trailing", "split"):
+            arm_pct = float(s["trail_activate_pct"])
+            trail_pct = float(s["trail_distance_pct"])
+            active = self.bybit.round_price(symbol,
+                     price * (1 + arm_pct) if side == "Buy" else price * (1 - arm_pct))
+            trail_dist = self.bybit.round_price(symbol, price * trail_pct)
+            try:
+                self.bybit.set_trailing(symbol, trail_dist, active)
+                desc.append(f"trailing arms @ ${active}")
+            except BybitError as e:
+                desc.append(f"trailing failed ({e})")
+
+        # take-profit
+        if exit_mode == "take_profit":
+            try:
+                self.bybit.set_take_profit(symbol, tp)
+                desc.append(f"take-profit ${tp}")
+            except BybitError as e:
+                desc.append(f"TP failed ({e})")
+        elif exit_mode == "split":
+            # bot closes HALF at the fixed target; the rest rides the trailing
+            half = self.bybit.round_qty(symbol, float(qty) / 2)
+            meta = store.get_runtime("split_meta", {})
+            meta[symbol] = {"side": side, "tp": float(tp), "half_qty": half}
+            store.set_runtime("split_meta", meta)
+            desc.append(f"half take-profit @ ${tp}, half trails")
+
+        m = self.bybit.mode.upper()
+        notify.send(f"{'📈' if side == 'Buy' else '📉'} {m} {side.upper()} "
+                    f"{symbol} qty {qty} @ ~${price:,.2f}\n" + " | ".join(desc))
 
     def hourly_check(self):
         s = store.get_settings()
@@ -143,6 +167,9 @@ class Engine:
                     held = pos["side"]  # Buy / Sell
                     if (signal == "SELL" and held == "Buy") or (signal == "BUY" and held == "Sell"):
                         self.bybit.close_position(symbol, held, pos["size"])
+                        meta = store.get_runtime("split_meta", {})
+                        meta.pop(symbol, None)
+                        store.set_runtime("split_meta", meta)
                         notify.send(f"🔁 {symbol}: opposite signal — position closed.")
                         positions.pop(symbol, None)
                         pos = None
@@ -159,10 +186,40 @@ class Engine:
         store.set_runtime("signals", lines)
         store.set_runtime("last_hourly", _now().strftime("%Y-%m-%d %H:%M UTC"))
 
+    def split_take_half(self, positions):
+        """Split mode: once price reaches the fixed target, market-close HALF
+        (reduce-only); the remaining half keeps riding the exchange trailing."""
+        meta = store.get_runtime("split_meta", {})
+        if not meta:
+            return
+        by_sym = {p["symbol"]: p for p in positions}
+        for symbol, m in list(meta.items()):
+            pos = by_sym.get(symbol)
+            if not pos:                       # position fully gone already
+                meta.pop(symbol, None); continue
+            price = float(pos.get("markPrice") or 0)
+            hit = (price >= m["tp"]) if m["side"] == "Buy" else (price <= m["tp"])
+            if hit:
+                half = m.get("half_qty")
+                if half and float(pos["size"]) > float(half):
+                    try:
+                        self.bybit.close_position(symbol, m["side"], half)
+                        notify.send(f"🎯 {symbol}: half booked at target ${m['tp']} — "
+                                    f"the rest rides the trailing stop.")
+                    except Exception as e:
+                        print(f"[split half-close {symbol}] {e}")
+                meta.pop(symbol, None)
+        store.set_runtime("split_meta", meta)
+
     # ── reconcile / sync ──────────────────────────────────────────────
     def sync(self):
         s = store.get_settings()
         positions = self.bybit.positions()
+        try:
+            self.split_take_half(positions)
+            positions = self.bybit.positions()  # refresh after any half-close
+        except Exception as e:
+            print(f"[split] {e}")
 
         # Sweep Bybit's closed-PnL history (last 24h) every cycle and record
         # anything new — dedup by exchange order id, so restarts, crashes and
@@ -242,6 +299,7 @@ class Engine:
         for p in self.bybit.positions():
             self.bybit.close_position(p["symbol"], p["side"], p["size"])
             closed.append(p["symbol"])
+        store.set_runtime("split_meta", {})
         store.save_settings({"paused": True})
         notify.send(f"🛑 STOP ALL: closed {', '.join(closed) if closed else 'nothing open'}; "
                     f"trading paused.")

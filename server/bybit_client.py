@@ -156,6 +156,13 @@ class Bybit:
             "trailingStop": str(distance), "activePrice": str(active_price),
         })
 
+    def set_take_profit(self, symbol, tp_price):
+        """Exchange-native full-position take-profit (market trigger)."""
+        return self._post("/v5/position/trading-stop", {
+            "category": "linear", "symbol": symbol, "positionIdx": 0,
+            "takeProfit": str(tp_price), "tpTriggerBy": "LastPrice",
+        })
+
     def close_position(self, symbol, side, size):
         """Market-close: opposite-side reduce-only order for the full size."""
         opposite = "Sell" if side == "Buy" else "Buy"

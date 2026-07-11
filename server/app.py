@@ -32,6 +32,7 @@ NUMERIC_BOUNDS = {
     "allocated_capital": (10, 10_000_000),
     "trade_fraction": (0.01, 1.0),
     "stop_pct": (0.002, 0.5),
+    "take_profit_pct": (0.005, 0.5),
     "trail_activate_pct": (0.005, 0.5),
     "trail_distance_pct": (0.005, 0.5),
     "rsi_buy": (5, 50),
@@ -39,6 +40,7 @@ NUMERIC_BOUNDS = {
     "max_positions": (1, 10),
     "max_daily_loss_pct": (0.005, 0.5),
 }
+EXIT_MODES = ("take_profit", "trailing", "split")
 
 
 @app.on_event("startup")
@@ -113,6 +115,13 @@ async def save_settings(request: Request):
         if not syms:
             return JSONResponse({"error": "need at least one symbol"}, status_code=400)
         updates["symbols"] = syms
+    if "exit_mode" in body:
+        if body["exit_mode"] not in EXIT_MODES:
+            return JSONResponse({"error": "exit_mode must be take_profit/trailing/split"},
+                                status_code=400)
+        updates["exit_mode"] = body["exit_mode"]
+    if "one_at_a_time" in body:
+        updates["one_at_a_time"] = bool(body["one_at_a_time"])
     if "paused" in body:
         updates["paused"] = bool(body["paused"])
     store.save_settings(updates)

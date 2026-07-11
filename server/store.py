@@ -15,11 +15,14 @@ DEFAULTS = {
     "allocated_capital": 1000.0,   # the ONLY money the bot may use
     "trade_fraction": 0.20,        # fraction of allocated capital per trade
     "stop_pct": 0.02,              # initial stop-loss distance
+    "exit_mode": "split",          # "take_profit" | "trailing" | "split"
+    "take_profit_pct": 0.03,       # fixed take-profit target (tp & split modes)
     "trail_activate_pct": 0.05,    # arm the trailing stop at +5%
     "trail_distance_pct": 0.04,    # trail 4% off the peak
     "rsi_buy": 30.0,
     "rsi_sell": 70.0,
-    "max_positions": 3,
+    "one_at_a_time": True,         # only ONE open position across all coins
+    "max_positions": 3,            # cap when one_at_a_time is off
     "max_daily_loss_pct": 0.05,    # pause after -5% of allocated in a day
     "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
     "paused": False,
