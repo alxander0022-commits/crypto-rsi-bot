@@ -12,6 +12,7 @@ import hmac
 import os
 import secrets
 import threading
+import time
 
 from dotenv import load_dotenv
 
@@ -130,6 +131,47 @@ async def save_settings(request: Request):
         updates["paused"] = bool(body["paused"])
     store.save_settings(updates)
     return {"ok": True, "saved": sorted(updates)}
+
+
+RSI_WATCH = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT"]
+_rsi_cache = {"ts": 0.0, "data": None}
+_rsi_lock = threading.Lock()
+
+
+def _live_rsi_rows():
+    """Live RSI (includes the forming hourly candle — intentionally 'right
+    now') + the value 3 closed hours ago, for the watchlist + enabled coins."""
+    import pandas as pd
+    from ta.momentum import RSIIndicator
+    symbols = list(dict.fromkeys(RSI_WATCH + list(store.get_settings()["symbols"])))
+    out = []
+    for sym in symbols:
+        try:
+            rows = _engine.bybit.klines(sym, "60", 80)[::-1]   # oldest-first
+            closes = pd.Series([float(r[4]) for r in rows])
+            rsi = RSIIndicator(closes, 14).rsi()
+            out.append({
+                "symbol": sym,
+                "price": round(float(closes.iloc[-1]), 4),
+                "price_chg_3h": round((float(closes.iloc[-1]) / float(closes.iloc[-4]) - 1) * 100, 2),
+                "rsi_now": round(float(rsi.iloc[-1]), 1),
+                "rsi_3h": round(float(rsi.iloc[-4]), 1),
+            })
+        except Exception as e:
+            out.append({"symbol": sym, "error": str(e)[:60]})
+    return out
+
+
+@app.get("/api/rsi")
+def live_rsi(request: Request):
+    if not _authed(request):
+        return _deny()
+    with _rsi_lock:
+        if time.time() - _rsi_cache["ts"] > 60 or _rsi_cache["data"] is None:
+            _rsi_cache["data"] = _live_rsi_rows()
+            _rsi_cache["ts"] = time.time()
+    return {"coins": _rsi_cache["data"],
+            "age_s": int(time.time() - _rsi_cache["ts"])}
 
 
 @app.post("/api/stopall")

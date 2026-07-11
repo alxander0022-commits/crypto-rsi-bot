@@ -93,6 +93,12 @@
     </div>
 
     <div class="card">
+      <h2>📡 Live market — RSI now vs 3 hours ago</h2>
+      <div class="scroll"><table id="livemkt"><tbody></tbody></table></div>
+      <div class="mut" id="livemkt_note" style="font-size:11px;margin-top:6px"></div>
+    </div>
+
+    <div class="card">
       <div class="row">
         <div><b>Auto-trading</b><div class="mut" style="font-size:12px">Opens trades on signals when ON</div></div>
         <div id="master" class="switch off" onclick="toggleTrading()"><span class="dot"></span><span id="masterlbl">…</span></div>
@@ -250,7 +256,26 @@ async function setMode(m){ EXIT=m; renderMode();
   try{ await api('/api/settings',{exit_mode:m}); $('#exitmsg').textContent='✅ exit style: '+m; $('#exitmsg').className='msg green'; }
   catch(e){ $('#exitmsg').textContent='✗ '+e.message; $('#exitmsg').className='msg red'; } }
 
+function rsiCls(v){ return v>=70?'red':(v<=30?'green':''); }
+async function refreshLive(){
+  let d; try{ d = await api('/api/rsi'); }catch(e){ return; }
+  const hh='<tr><th>Coin</th><th>Price</th><th>3h price</th><th>RSI 3h ago</th><th></th><th>RSI now</th></tr>';
+  $('#livemkt tbody').innerHTML = hh + (d.coins||[]).map(c=>{
+    if(c.error) return `<tr><td>${c.symbol.replace('USDT','')}</td><td colspan="5" class="mut">no data</td></tr>`;
+    const dR = c.rsi_now - c.rsi_3h;
+    const arrow = dR > 1 ? '<span class="green">▲</span>' : (dR < -1 ? '<span class="red">▼</span>' : '<span class="mut">▬</span>');
+    return `<tr><td><b>${c.symbol.replace('USDT','')}</b></td>
+      <td>${money(c.price)}</td>
+      <td class="${cls(c.price_chg_3h)}">${c.price_chg_3h>0?'+':''}${c.price_chg_3h}%</td>
+      <td class="mut">${c.rsi_3h}</td><td>${arrow}</td>
+      <td class="${rsiCls(c.rsi_now)}"><b>${c.rsi_now}</b></td></tr>`;
+  }).join('');
+  $('#livemkt_note').textContent = 'Live RSI includes the current forming hourly candle · refreshed every minute · '
+    + 'red RSI = overbought (≥70), green = oversold (≤30)';
+}
+
 async function refresh(){
+  refreshLive();
   let d; try{ d=await api('/api/status'); }catch(e){ return; }
   show(true);
   const st=d.status||{}, s=d.settings||{}, stats=d.stats||{};
