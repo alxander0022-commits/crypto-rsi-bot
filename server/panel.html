@@ -67,7 +67,9 @@
   <div id="login" class="center card">
     <h1>🔐 My Trading Bot</h1>
     <div class="mut" style="margin:8px 0 12px;font-size:13px">Enter your panel password</div>
-    <input id="pw" type="password" autocomplete="current-password">
+    <input id="pw" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label class="mut" style="display:block;margin-top:8px;font-size:13px;cursor:pointer">
+      <input type="checkbox" onclick="document.getElementById('pw').type=this.checked?'text':'password'"> show password</label>
     <div style="margin-top:12px"><button class="wide" onclick="login()">Open panel</button></div>
     <div id="loginmsg" class="msg red"></div>
   </div>
@@ -207,7 +209,7 @@ async function api(path, body){
   return d;
 }
 function show(on){ $('#login').style.display = on?'none':'block'; $('#panel').style.display = on?'block':'none'; }
-async function login(){ try{ await api('/api/login',{password:$('#pw').value}); show(true); refresh(); }
+async function login(){ try{ await api('/api/login',{password:$('#pw').value.trim()}); show(true); refresh(); }
   catch(e){ $('#loginmsg').textContent='Wrong password'; } }
 $('#pw').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 
