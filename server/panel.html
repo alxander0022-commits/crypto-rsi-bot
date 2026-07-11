@@ -148,9 +148,12 @@
       <h2>🎛️ Money &amp; risk</h2>
       <div class="set"><label>Money per trade<small>slice of the account used each trade</small></label>
         <div class="field"><input id="trade_fraction" type="number" step="any"><span class="unit">%</span></div></div>
-      <div class="set"><label>Leverage<small class="amber">multiplies position size — wins AND losses get ×leverage bigger</small></label>
-        <div class="field"><input id="leverage" type="number" min="1" max="10" step="1"><span class="unit">×</span></div></div>
-      <div class="mut" id="levpreview" style="font-size:12px;padding:4px 0 8px"></div>
+      <div style="padding:10px 0;border-bottom:1px solid var(--line)">
+        <label style="font-size:14px">Leverage
+          <small class="amber" style="display:block;font-size:12px">multiplies position size — wins AND losses get ×leverage bigger</small></label>
+        <div class="levbtns" id="levbtns" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+        <div class="mut" id="levpreview" style="font-size:12px;padding:8px 0 0"></div>
+      </div>
       <div class="set"><label>Stop-loss<small>max loss before it cuts the trade</small></label>
         <div class="field"><input id="stop_pct" type="number" step="any"><span class="unit">%</span></div></div>
       <div class="set"><label>Daily loss limit<small>bot pauses itself if it loses this much in a day</small></label>
@@ -195,7 +198,8 @@ const money = n => n==null ? '—' : (n<0?'-':'') + '$' + Math.abs(+n).toLocaleS
 const cls = n => (+n)>0?'green':((+n)<0?'red':'mut');
 const POPULAR = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","BNBUSDT"];
 const PCT = ["trade_fraction","stop_pct","take_profit_pct","trail_activate_pct","trail_distance_pct","max_daily_loss_pct"];
-const PLAIN = ["rsi_buy","rsi_sell","max_positions","leverage"];
+const PLAIN = ["rsi_buy","rsi_sell","max_positions"];
+let LEV = 1;
 const MODE_TXT = {
   take_profit:"Closes the whole trade at your fixed take-profit target.",
   trailing:"No fixed target — rides the trend and exits when it reverses off the peak.",
@@ -292,6 +296,7 @@ async function refresh(){
     PCT.forEach(k=> $('#'+k).value = Math.round((+s[k])*1000)/10);
     PLAIN.forEach(k=> $('#'+k).value = s[k]);
     EXIT = s.exit_mode || 'split'; renderMode();
+    LEV = parseInt(s.leverage) || 1; renderLev();
     settingsLoaded = true;
   }
   ALLOC = +s.allocated_capital || ALLOC;
@@ -301,15 +306,27 @@ async function refresh(){
 let ALLOC = 1000;
 function levPreview(){
   const f = parseFloat($('#trade_fraction').value) / 100 || 0;
-  const lv = parseInt($('#leverage').value) || 1;
-  const base = ALLOC * f, size = base * lv;
+  const base = ALLOC * f, size = base * LEV;
   const stopCost = size * (parseFloat($('#stop_pct').value) / 100 || 0);
-  $('#levpreview').innerHTML = lv > 1
-    ? `→ each trade: <b>${money(size)}</b> position (${money(base)} × ${lv}) · a stop-loss hit costs ≈ <b class="red">${money(stopCost)}</b>`
+  $('#levpreview').innerHTML = LEV > 1
+    ? `→ each trade: <b>${money(size)}</b> position (${money(base)} × ${LEV}) · a stop-loss hit costs ≈ <b class="red">${money(stopCost)}</b>`
     : `→ each trade: <b>${money(size)}</b> position · a stop-loss hit costs ≈ ${money(stopCost)}`;
 }
-['leverage','trade_fraction','stop_pct'].forEach(id =>
+['trade_fraction','stop_pct'].forEach(id =>
   document.getElementById(id).addEventListener('input', levPreview));
+
+function renderLev(){
+  $('#levbtns').innerHTML = Array.from({length:10},(_,i)=>i+1).map(n =>
+    `<div class="modebtn${n===LEV?' on':''}" style="flex:1;min-width:40px;padding:10px 0"
+       onclick="setLev(${n})">${n}×</div>`).join('');
+}
+async function setLev(n){
+  LEV = n; renderLev(); levPreview();
+  try{ await api('/api/settings',{leverage:n});
+       $('#setmsg').textContent = '✅ leverage set to ' + n + '×';
+       $('#setmsg').className = 'msg ' + (n >= 5 ? 'amber' : 'green'); }
+  catch(e){ $('#setmsg').textContent = '✗ ' + e.message; $('#setmsg').className='msg red'; }
+}
 
 async function toggleTrading(){
   const on = $('#master').classList.contains('on');
@@ -325,7 +342,8 @@ async function toggleOne(){
 }
 async function saveSettings(){
   const body={}; PCT.forEach(k=> body[k]=parseFloat($('#'+k).value)/100);
-  PLAIN.forEach(k=> body[k]=parseFloat($('#'+k).value)); body.exit_mode=EXIT;
+  PLAIN.forEach(k=> body[k]=parseFloat($('#'+k).value));
+  body.exit_mode=EXIT; body.leverage=LEV;
   try{ await api('/api/settings',body); $('#setmsg').textContent='✅ saved'; $('#setmsg').className='msg green';
     $('#exitmsg').textContent='✅ saved'; $('#exitmsg').className='msg green'; }
   catch(e){ $('#setmsg').textContent='✗ '+e.message; $('#setmsg').className='msg red'; }
