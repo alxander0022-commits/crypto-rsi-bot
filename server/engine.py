@@ -96,7 +96,9 @@ class Engine:
     # ── entries ───────────────────────────────────────────────────────
     def open_trade(self, s, symbol, signal, price):
         side = "Buy" if signal == "BUY" else "Sell"
-        notional = float(s["allocated_capital"]) * float(s["trade_fraction"])
+        lev = max(1, min(10, int(s.get("leverage", 1))))
+        # classic leverage: multiplies position size (owner decision 2026-07-11)
+        notional = float(s["allocated_capital"]) * float(s["trade_fraction"]) * lev
         qty = self.bybit.round_qty(symbol, notional / price)
         if not qty:
             notify.send(f"⚠️ {symbol}: trade size ${notional:,.0f} is below the "
@@ -113,9 +115,18 @@ class Engine:
             sl = self.bybit.round_price(symbol, price * (1 + stop_pct))
             tp = self.bybit.round_price(symbol, price * (1 - tp_pct))
 
-        self.bybit.set_leverage(symbol, "1")
+        # apply the selected leverage and confirm it took effect on the position
+        self.bybit.set_leverage(symbol, str(lev))
         self.bybit.market_order(symbol, side, qty, stop_loss=sl)  # SL always on exchange
         desc = [f"stop ${sl}"]
+        try:
+            pos_now = {p["symbol"]: p for p in self.bybit.positions()}.get(symbol)
+            actual_lev = pos_now.get("leverage") if pos_now else None
+            desc.append(f"leverage {actual_lev or lev}x"
+                        + ("" if str(actual_lev or lev).startswith(str(lev)) else
+                           f" ⚠️ (requested {lev}x)"))
+        except Exception:
+            desc.append(f"leverage {lev}x (unverified)")
 
         # trailing stop on exchange (trailing & split modes)
         if exit_mode in ("trailing", "split"):
@@ -242,6 +253,7 @@ class Engine:
                 exit_price=float(rec.get("avgExitPrice") or 0),
                 pnl=float(rec.get("closedPnl") or 0),
                 exchange_id=rec.get("orderId"),
+                leverage=float(rec.get("leverage") or 0) or None,
             )
             if is_new:
                 pnl = float(rec.get("closedPnl") or 0)
@@ -265,7 +277,7 @@ class Engine:
                 "symbol": p["symbol"], "side": p["side"], "size": p["size"],
                 "entry": p.get("avgPrice"), "mark": p.get("markPrice"),
                 "upnl": p.get("unrealisedPnl"), "sl": p.get("stopLoss"),
-                "trailing": p.get("trailingStop"),
+                "trailing": p.get("trailingStop"), "lev": p.get("leverage"),
             } for p in positions],
             "pnl_today": round(store.pnl_today(), 2),
             "last_error": self.last_error,

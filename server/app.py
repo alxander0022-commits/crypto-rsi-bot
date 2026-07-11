@@ -38,8 +38,10 @@ NUMERIC_BOUNDS = {
     "rsi_buy": (5, 50),
     "rsi_sell": (50, 95),
     "max_positions": (1, 10),
+    "leverage": (1, 10),
     "max_daily_loss_pct": (0.005, 0.5),
 }
+INT_KEYS = ("max_positions", "leverage")
 EXIT_MODES = ("take_profit", "trailing", "split")
 
 
@@ -111,7 +113,7 @@ async def save_settings(request: Request):
             if not (lo <= v <= hi):
                 return JSONResponse({"error": f"{key} must be between {lo} and {hi}"},
                                     status_code=400)
-            updates[key] = int(v) if key == "max_positions" else v
+            updates[key] = int(v) if key in INT_KEYS else v
     if "symbols" in body:
         syms = [str(x).upper().strip() for x in body["symbols"] if str(x).strip()]
         if not syms:

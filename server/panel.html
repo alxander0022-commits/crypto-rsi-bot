@@ -148,6 +148,9 @@
       <h2>🎛️ Money &amp; risk</h2>
       <div class="set"><label>Money per trade<small>slice of the account used each trade</small></label>
         <div class="field"><input id="trade_fraction" type="number" step="any"><span class="unit">%</span></div></div>
+      <div class="set"><label>Leverage<small class="amber">multiplies position size — wins AND losses get ×leverage bigger</small></label>
+        <div class="field"><input id="leverage" type="number" min="1" max="10" step="1"><span class="unit">×</span></div></div>
+      <div class="mut" id="levpreview" style="font-size:12px;padding:4px 0 8px"></div>
       <div class="set"><label>Stop-loss<small>max loss before it cuts the trade</small></label>
         <div class="field"><input id="stop_pct" type="number" step="any"><span class="unit">%</span></div></div>
       <div class="set"><label>Daily loss limit<small>bot pauses itself if it loses this much in a day</small></label>
@@ -192,7 +195,7 @@ const money = n => n==null ? '—' : (n<0?'-':'') + '$' + Math.abs(+n).toLocaleS
 const cls = n => (+n)>0?'green':((+n)<0?'red':'mut');
 const POPULAR = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","BNBUSDT"];
 const PCT = ["trade_fraction","stop_pct","take_profit_pct","trail_activate_pct","trail_distance_pct","max_daily_loss_pct"];
-const PLAIN = ["rsi_buy","rsi_sell","max_positions"];
+const PLAIN = ["rsi_buy","rsi_sell","max_positions","leverage"];
 const MODE_TXT = {
   take_profit:"Closes the whole trade at your fixed take-profit target.",
   trailing:"No fixed target — rides the trend and exits when it reverses off the peak.",
@@ -263,20 +266,22 @@ async function refresh(){
 
   SYMBOLS = s.symbols || SYMBOLS; renderChips(d.signals);
 
-  const ph='<tr><th>Coin</th><th>Dir</th><th>Size</th><th>Entry</th><th>Now</th><th>Profit</th></tr>';
+  const ph='<tr><th>Coin</th><th>Dir</th><th>Lev</th><th>Size</th><th>Entry</th><th>Now</th><th>Profit</th></tr>';
   $('#pos tbody').innerHTML = ph + ((st.positions||[]).map(p=>`<tr>
     <td>${p.symbol.replace('USDT','')}</td>
     <td class="${p.side==='Buy'?'green':'red'}">${p.side==='Buy'?'LONG':'SHORT'}${p.trailing&&+p.trailing?' 🔒':''}</td>
+    <td>${p.lev?(+p.lev)+'×':'—'}</td>
     <td>${p.size}</td><td>${money(p.entry)}</td><td>${money(p.mark)}</td>
     <td class="${cls(p.upnl)}">${money(p.upnl)}</td></tr>`).join('')
-    || '<tr><td colspan="6" class="mut">no open trades right now</td></tr>');
+    || '<tr><td colspan="7" class="mut">no open trades right now</td></tr>');
 
-  const th='<tr><th>When</th><th>Coin</th><th>Dir</th><th>Profit</th></tr>';
+  const th='<tr><th>When</th><th>Coin</th><th>Dir</th><th>Lev</th><th>Profit</th></tr>';
   $('#trades tbody').innerHTML = th + ((d.trades||[]).map(t=>`<tr>
     <td class="mut">${(t.closed_at||'').slice(5,16)}</td><td>${t.symbol.replace('USDT','')}</td>
     <td class="${t.side==='Buy'?'green':'red'}">${t.side==='Buy'?'long':'short'}</td>
+    <td>${t.leverage?(+t.leverage)+'×':'—'}</td>
     <td class="${cls(t.pnl)}">${money(t.pnl)}</td></tr>`).join('')
-    || '<tr><td colspan="4" class="mut">no closed trades yet</td></tr>');
+    || '<tr><td colspan="5" class="mut">no closed trades yet</td></tr>');
 
   const lb=$('#golivebox');
   if(d.mode==='live'&&!s.live_confirmed){ lb.classList.remove('hide'); $('#golivetxt').textContent='LIVE server, not yet confirmed. No real order until you type GO-LIVE.'; }
@@ -289,7 +294,22 @@ async function refresh(){
     EXIT = s.exit_mode || 'split'; renderMode();
     settingsLoaded = true;
   }
+  ALLOC = +s.allocated_capital || ALLOC;
+  levPreview();
 }
+
+let ALLOC = 1000;
+function levPreview(){
+  const f = parseFloat($('#trade_fraction').value) / 100 || 0;
+  const lv = parseInt($('#leverage').value) || 1;
+  const base = ALLOC * f, size = base * lv;
+  const stopCost = size * (parseFloat($('#stop_pct').value) / 100 || 0);
+  $('#levpreview').innerHTML = lv > 1
+    ? `→ each trade: <b>${money(size)}</b> position (${money(base)} × ${lv}) · a stop-loss hit costs ≈ <b class="red">${money(stopCost)}</b>`
+    : `→ each trade: <b>${money(size)}</b> position · a stop-loss hit costs ≈ ${money(stopCost)}`;
+}
+['leverage','trade_fraction','stop_pct'].forEach(id =>
+  document.getElementById(id).addEventListener('input', levPreview));
 
 async function toggleTrading(){
   const on = $('#master').classList.contains('on');

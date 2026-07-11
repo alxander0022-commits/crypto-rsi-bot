@@ -21,6 +21,7 @@ DEFAULTS = {
     "trail_distance_pct": 0.04,    # trail 4% off the peak
     "rsi_buy": 30.0,
     "rsi_sell": 70.0,
+    "leverage": 1,                 # 1-10x; multiplies position size (classic)
     "one_at_a_time": True,         # only ONE open position across all coins
     "max_positions": 3,            # cap when one_at_a_time is off
     "max_daily_loss_pct": 0.05,    # pause after -5% of allocated in a day
@@ -49,6 +50,11 @@ def init():
             pnl REAL NOT NULL,
             exchange_id TEXT UNIQUE       -- Bybit orderId, dedups sync
         )""")
+        # migration: leverage column (added 2026-07-11)
+        try:
+            c.execute("ALTER TABLE trades ADD COLUMN leverage REAL")
+        except sqlite3.OperationalError:
+            pass  # already exists
 
 
 def get_settings():
@@ -88,14 +94,15 @@ def get_runtime(key, default=None):
     return json.loads(row["value"]) if row else default
 
 
-def record_trade(closed_at, symbol, side, qty, entry, exit_price, pnl, exchange_id):
+def record_trade(closed_at, symbol, side, qty, entry, exit_price, pnl, exchange_id,
+                 leverage=None):
     """Insert a closed trade; ignore duplicates (same exchange order id)."""
     init()
     with _conn() as c:
         c.execute("""INSERT OR IGNORE INTO trades
-            (closed_at, symbol, side, qty, entry, exit_price, pnl, exchange_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (closed_at, symbol, side, qty, entry, exit_price, pnl, exchange_id))
+            (closed_at, symbol, side, qty, entry, exit_price, pnl, exchange_id, leverage)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (closed_at, symbol, side, qty, entry, exit_price, pnl, exchange_id, leverage))
         return c.execute("SELECT changes()").fetchone()[0] > 0
 
 
