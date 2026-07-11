@@ -62,14 +62,16 @@ def _deny():
 
 @app.get("/")
 def index():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "panel.html"))
+    return FileResponse(os.path.join(os.path.dirname(__file__), "panel.html"),
+                        headers={"Cache-Control": "no-store, max-age=0"})
 
 
 @app.post("/api/login")
 async def login(request: Request, response: Response):
     body = await request.json()
-    expected = os.getenv("PANEL_PASSWORD", "")
-    if not expected or not hmac.compare_digest(str(body.get("password", "")), expected):
+    expected = os.getenv("PANEL_PASSWORD", "").strip()
+    supplied = str(body.get("password", "")).strip()   # tolerate stray spaces
+    if not expected or not hmac.compare_digest(supplied, expected):
         return JSONResponse({"error": "wrong password"}, status_code=401)
     tok = secrets.token_urlsafe(32)
     _sessions.add(tok)
