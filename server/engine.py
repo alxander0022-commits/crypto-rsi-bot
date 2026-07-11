@@ -163,30 +163,37 @@ class Engine:
     def sync(self):
         s = store.get_settings()
         positions = self.bybit.positions()
-        open_now = {p["symbol"] for p in positions}
-        known = set(store.get_runtime("open_symbols", []))
 
-        # positions that disappeared -> closed by Bybit (stop/trailing/manual)
-        for symbol in known - open_now:
-            start = int(time.time() * 1000) - 24 * 3600 * 1000
-            for rec in self.bybit.closed_pnl(symbol=symbol, start_ms=start):
-                is_new = store.record_trade(
-                    closed_at=_now().strftime("%Y-%m-%d %H:%M:%S"),
-                    symbol=rec["symbol"], side=rec["side"],
-                    qty=float(rec.get("qty") or 0),
-                    entry=float(rec.get("avgEntryPrice") or 0),
-                    exit_price=float(rec.get("avgExitPrice") or 0),
-                    pnl=float(rec.get("closedPnl") or 0),
-                    exchange_id=rec.get("orderId"),
-                )
-                if is_new:
-                    pnl = float(rec.get("closedPnl") or 0)
-                    icon = "✅" if pnl >= 0 else "❌"
-                    notify.send(f"{icon} {rec['symbol']} closed: "
-                                f"{'+' if pnl >= 0 else ''}{pnl:,.2f} USDT "
-                                f"(entry {rec.get('avgEntryPrice')} → {rec.get('avgExitPrice')})")
+        # Sweep Bybit's closed-PnL history (last 24h) every cycle and record
+        # anything new — dedup by exchange order id, so restarts, crashes and
+        # exchange-side closes (stop/trailing/manual) can never lose a trade.
+        start = int(time.time() * 1000) - 24 * 3600 * 1000
+        try:
+            closed = self.bybit.closed_pnl(start_ms=start)
+        except Exception:
+            closed = []
+        for rec in closed:
+            ts_ms = int(rec.get("updatedTime") or rec.get("createdTime") or 0)
+            closed_at = (datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+                         .strftime("%Y-%m-%d %H:%M:%S") if ts_ms
+                         else _now().strftime("%Y-%m-%d %H:%M:%S"))
+            is_new = store.record_trade(
+                closed_at=closed_at,
+                symbol=rec["symbol"], side=rec["side"],
+                qty=float(rec.get("qty") or 0),
+                entry=float(rec.get("avgEntryPrice") or 0),
+                exit_price=float(rec.get("avgExitPrice") or 0),
+                pnl=float(rec.get("closedPnl") or 0),
+                exchange_id=rec.get("orderId"),
+            )
+            if is_new:
+                pnl = float(rec.get("closedPnl") or 0)
+                icon = "✅" if pnl >= 0 else "❌"
+                notify.send(f"{icon} {rec['symbol']} closed: "
+                            f"{'+' if pnl >= 0 else ''}{pnl:,.2f} USDT "
+                            f"(entry {rec.get('avgEntryPrice')} → {rec.get('avgExitPrice')})")
 
-        store.set_runtime("open_symbols", sorted(open_now))
+        store.set_runtime("open_symbols", sorted(p["symbol"] for p in positions))
 
         # status snapshot for the panel
         try:
