@@ -19,6 +19,18 @@ hand-coded) **RSI(14)** on 1h and the **trend** on the daily timeframe
 (`MA50`/`MA200` for direction, `ADX(14)` for strength). It also logs one row per
 coin to `ledger.csv` and reads any `/buy` `/sell` commands you sent.
 
+**Paper auto-trader (simulated money — never touches an exchange):** each hour,
+after the signals, it opens a simulated LONG on 🟢 BUY / SHORT on 🔴 SELL (20% of
+paper equity, 2% stop, 3% target), manages exits (stop / target / opposite
+signal) against the latest 1h candle, books P&L into a virtual account, logs
+closed trades to `trades.csv`, and Telegrams each open/close. Toggle with
+`PAPER_TRADING`. **This has no exchange connection and cannot touch real money.**
+
+**Web dashboard:** a free GitHub Pages site
+(`https://alxander0022-commits.github.io/crypto-rsi-bot/`) shows live signals,
+Fear & Greed, open positions with P&L, trade history, equity and win rate. The
+bot writes `docs/data.json` each run; enable Pages with source **main / `/docs`**.
+
 **Every 12 hours** (`bot.py news`) — a market-mood report:
 - The **crypto Fear & Greed Index** (free, no key) as a text gauge **plus the
   official chart image**, so you can see at a glance if people are fearful or greedy.

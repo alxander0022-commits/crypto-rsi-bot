@@ -34,10 +34,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python bot.py run
 
-      - name: Persist state & ledger
+      - name: Persist state, ledger, trades & dashboard
         run: |
           git config user.name "rsi-bot"
           git config user.email "rsi-bot@users.noreply.github.com"
-          git add state.json ledger.csv
+          git add state.json ledger.csv trades.csv docs/data.json
           git commit -m "run $(date -u +%FT%TZ)" || echo "nothing to commit"
           git push

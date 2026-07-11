@@ -1,0 +1,58 @@
+{
+  "updated": "2026-07-11 08:20 UTC",
+  "coins": [
+    {
+      "symbol": "BTCUSDT",
+      "short": "BTC",
+      "trend": "DOWN",
+      "rsi": 58.3,
+      "price": 64186.0,
+      "signal": "NONE",
+      "note": ""
+    },
+    {
+      "symbol": "ETHUSDT",
+      "short": "ETH",
+      "trend": "DOWN",
+      "rsi": 61.4,
+      "price": 1799.59,
+      "signal": "NONE",
+      "note": ""
+    },
+    {
+      "symbol": "SOLUSDT",
+      "short": "SOL",
+      "trend": "SIDEWAYS",
+      "rsi": 48.7,
+      "price": 77.97,
+      "signal": "NONE",
+      "note": ""
+    }
+  ],
+  "fng": {
+    "value": 26,
+    "label": "Fear"
+  },
+  "portfolio": {
+    "start": 10000.0,
+    "equity": 10000.0,
+    "equity_mtm": 10000.0,
+    "return_pct": 0.0,
+    "open": []
+  },
+  "stats": {
+    "n_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": 0.0,
+    "total_pnl": 0
+  },
+  "trades": [],
+  "settings": {
+    "rsi_buy": 30,
+    "rsi_sell": 70,
+    "stop_pct": 2.0,
+    "target_pct": 3.0,
+    "trade_fraction": 20.0
+  }
+}

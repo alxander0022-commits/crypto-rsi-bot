@@ -37,6 +37,8 @@ import data
 import indicators
 import notify
 import ledger
+import trader
+import dashboard
 import state as state_mod
 
 
@@ -83,13 +85,16 @@ def fng_line():
 
 def read_market(symbol):
     """Fetch + compute for one symbol.
-    Returns (price, rsi_prev, rsi, direction, adx)."""
+    Returns (price, rsi_prev, rsi, direction, adx, hi, lo) where hi/lo are the
+    latest 1h candle's high/low (used to detect stop/target touches)."""
     df_1h = data.get_klines(symbol, config.ENTRY_TIMEFRAME, config.CATEGORY, config.KLINE_LIMIT)
     df_trend = data.get_klines(symbol, config.TREND_TIMEFRAME, config.CATEGORY, config.KLINE_LIMIT)
     price = float(df_1h["close"].iloc[-1])
+    hi = float(df_1h["high"].iloc[-1])
+    lo = float(df_1h["low"].iloc[-1])
     rsi_prev, rsi = indicators.latest_rsi_pair(df_1h)
     direction, adx, _, _, _ = indicators.trend_state(df_trend)
-    return price, rsi_prev, rsi, direction, adx
+    return price, rsi_prev, rsi, direction, adx, hi, lo
 
 
 def decide_signal(direction, rsi_prev, rsi):
@@ -215,11 +220,11 @@ VERDICT = {"BUY": "🟢 time to BUY", "SELL": "🔴 time to SELL", "NONE": "⛔ 
 ACTION_WORD = {"BUY": "buy", "SELL": "sell", "NONE": "stay_out"}  # plain, for the CSV
 
 
-def evaluate_symbol(state, symbol):
-    """Compute one coin's trend + RSI + verdict, log a ledger row, and return
-    the one-line sentence for the hourly message."""
+def evaluate_symbol(state, symbol, ts_iso):
+    """Compute one coin's trend + RSI + verdict, run the paper trader, log a
+    ledger row, and return the sentence, dashboard data, and any trade events."""
     pos = state_mod.get_pos(state, symbol)
-    price, rsi_prev, rsi, direction, adx = read_market(symbol)
+    price, rsi_prev, rsi, direction, adx, hi, lo = read_market(symbol)
     signal = decide_signal(direction, rsi_prev, rsi)
 
     pos["last_signal"] = signal
@@ -227,12 +232,19 @@ def evaluate_symbol(state, symbol):
     ledger.append([ts, symbol, round(price, 2), round(rsi, 1),
                    direction, round(adx, 1), signal, ACTION_WORD[signal]])
 
+    # paper auto-trader: open/manage a simulated position
+    events = trader.process(state, symbol, signal, price, hi, lo, ts_iso)
+
     short = symbol.replace("USDT", "")
     note = setup_note(direction, rsi, signal)
     return {
         "sentence": f"{short} — trend {TREND_WORD[direction]}, RSI {rsi:.0f} → {VERDICT[signal]}{note}",
         "console": f"{symbol} ${fmt(price)} | RSI {rsi:.1f} | {direction} "
                    f"(ADX {adx:.1f}) | {signal}{note}",
+        "events": events,
+        "coin": {"symbol": symbol, "short": short, "trend": TREND_WORD[direction],
+                 "rsi": round(rsi, 1), "price": round(price, 2),
+                 "signal": signal, "note": note.strip()},
     }
 
 
@@ -247,24 +259,40 @@ def cmd_run():
         print(f"[command polling error] {e}")
 
     ts = now_utc().strftime("%Y-%m-%d %H:%M UTC")
+    ts_iso = now_utc().strftime("%Y-%m-%d %H:%M UTC")
     sentences = []
+    coins = []
+    trade_events = []
     ok_count = 0
     for symbol in config.SYMBOLS:
         try:
-            res = evaluate_symbol(state, symbol)
+            res = evaluate_symbol(state, symbol, ts_iso)
             print(f"{ts} | {res['console']}")
             sentences.append(res["sentence"])
+            coins.append(res["coin"])
+            trade_events.extend(res["events"])
             ok_count += 1
         except Exception as e:
             print(f"{ts} | [{symbol} error] {e}")
             sentences.append(f"{symbol.replace('USDT', '')} — data error")
 
-    # one combined message (skip only if every coin failed, e.g. network down)
+    # paper-trade open/close events (separate message so they stand out)
+    for ev in trade_events:
+        notify.send(ev)
+        print(ev)
+
+    # the hourly status message (skip only if every coin failed)
     if ok_count:
         fg = fng_line()
         if fg:
             sentences.append(fg)
         notify.send("\n".join(sentences))
+
+    # update the dashboard data (never let it break the run)
+    try:
+        dashboard.write(state, coins)
+    except Exception as e:
+        print(f"[dashboard error] {e}")
 
     state_mod.save(state)
 
@@ -274,7 +302,7 @@ def cmd_snapshot():
     lines = []
     for symbol in config.SYMBOLS:
         try:
-            price, rsi_prev, rsi, direction, adx = read_market(symbol)
+            price, rsi_prev, rsi, direction, adx, hi, lo = read_market(symbol)
             signal = decide_signal(direction, rsi_prev, rsi)
             short = symbol.replace("USDT", "")
             note = setup_note(direction, rsi, signal)

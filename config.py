@@ -40,10 +40,18 @@ ADX_MIN          = 20            # ADX below this = no real trend -> SIDEWAYS
 #   DOWNTREND + RSI > RSI_SELL  -> 🔴 time to SELL
 #   otherwise                   -> ⛔ stay out
 
-# Position tracking (/buy /sell + ledger P&L) is kept for your manual paper
-# record only — these no longer drive alerts.
-TARGET_PCT        = 0.03         # shown in /status only
-DISASTER_STOP_ON  = False        # unused by the current model
+# ─── PAPER AUTO-TRADER (simulated money — NEVER touches an exchange) ───
+PAPER_TRADING    = True          # auto-open/close simulated trades on signals
+START_BALANCE    = 10000.0       # starting virtual account (USD)
+TRADE_FRACTION   = 0.20          # fraction of equity to put in each trade
+STOP_PCT         = 0.02          # stop-loss distance from entry (2%)
+TARGET_PCT       = 0.03          # take-profit distance from entry (3%)
+ALLOW_SHORTS     = True          # allow simulated SHORTs on 🔴 SELL signals
+TRADES_FILE      = "trades.csv"  # closed-trade log
+DATA_FILE        = "docs/data.json"  # dashboard data written each run
+
+# (legacy manual-position fields, unused by the auto-trader)
+DISASTER_STOP_ON  = False
 DISASTER_STOP_PCT = 0.15
 
 # ─── 12-HOUR REPORT ───────────────────────────────────────────────────

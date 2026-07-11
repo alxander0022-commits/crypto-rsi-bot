@@ -22,17 +22,30 @@ def _default_pos():
     return {"holding": False, "entry_price": None, "entry_time": None, "last_signal": None}
 
 
+def _default_portfolio():
+    # equity = realized paper account value; `open` holds live simulated trades
+    return {"equity": config.START_BALANCE, "open": {}}
+
+
 def load():
     if not os.path.exists(config.STATE_FILE):
-        return {"positions": {}, "last_update_id": 0}
-    with open(config.STATE_FILE, "r", encoding="utf-8") as f:
-        state = json.load(f)
+        state = {"positions": {}, "last_update_id": 0}
+    else:
+        with open(config.STATE_FILE, "r", encoding="utf-8") as f:
+            state = json.load(f)
     # migrate any older single-symbol file: just keep the update id
     if "positions" not in state:
         state = {"positions": {}, "last_update_id": state.get("last_update_id", 0)}
     state.setdefault("positions", {})
     state.setdefault("last_update_id", 0)
+    state.setdefault("portfolio", _default_portfolio())
+    state["portfolio"].setdefault("equity", config.START_BALANCE)
+    state["portfolio"].setdefault("open", {})
     return state
+
+
+def portfolio(state):
+    return state["portfolio"]
 
 
 def get_pos(state, symbol):
