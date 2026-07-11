@@ -44,9 +44,18 @@ ADX_MIN          = 20            # ADX below this = no real trend -> SIDEWAYS
 PAPER_TRADING    = True          # auto-open/close simulated trades on signals
 START_BALANCE    = 10000.0       # starting virtual account (USD)
 TRADE_FRACTION   = 0.20          # fraction of equity to put in each trade
-STOP_PCT         = 0.02          # stop-loss distance from entry (2%)
-TARGET_PCT       = 0.03          # take-profit distance from entry (3%)
+STOP_PCT         = 0.02          # initial stop-loss distance from entry (2%)
+TARGET_PCT       = 0.03          # fixed take-profit (used only when TRAIL_ON = False)
 ALLOW_SHORTS     = True          # allow simulated SHORTs on 🔴 SELL signals
+
+# Trailing stop — let winners run. Once a trade is +TRAIL_ACTIVATE_PCT in
+# profit, a stop trails TRAIL_DISTANCE_PCT below the best price reached: the
+# trade keeps running while the trend continues and exits only when it reverses,
+# locking in at least (TRAIL_ACTIVATE_PCT - TRAIL_DISTANCE_PCT) profit.
+# Example below: ride from +5%, trail 4% off the peak -> ~1% floor once armed.
+TRAIL_ON            = True
+TRAIL_ACTIVATE_PCT  = 0.05       # arm the trailing stop after +5% profit
+TRAIL_DISTANCE_PCT  = 0.04       # then exit if price falls 4% from its peak
 TRADES_FILE      = "trades.csv"  # closed-trade log
 DATA_FILE        = "docs/data.json"  # dashboard data written each run
 

@@ -18,6 +18,10 @@ def _f(x):
     return f"{x:,.2f}"
 
 
+def _pc(frac):
+    return f"{frac * 100:g}%"
+
+
 def _short(symbol):
     return symbol.replace("USDT", "")
 
@@ -28,17 +32,22 @@ def _open(pf, symbol, signal, price, ts):
     qty = size_usd / price if price else 0.0
     if side == "long":
         stop = price * (1 - config.STOP_PCT)
-        target = price * (1 + config.TARGET_PCT)
+        target = None if config.TRAIL_ON else price * (1 + config.TARGET_PCT)
     else:
         stop = price * (1 + config.STOP_PCT)
-        target = price * (1 - config.TARGET_PCT)
+        target = None if config.TRAIL_ON else price * (1 - config.TARGET_PCT)
     pf["open"][symbol] = {
         "side": side, "entry": price, "qty": qty, "size_usd": size_usd,
-        "stop": stop, "target": target, "opened": ts,
+        "stop": stop, "target": target, "peak": price, "trail_active": False,
+        "opened": ts,
     }
     icon = "📈" if side == "long" else "📉"
-    return (f"{icon} PAPER {side.upper()} {_short(symbol)} @ ${_f(price)}\n"
-            f"stop ${_f(stop)} | target ${_f(target)} | size ${_f(size_usd)}")
+    head = f"{icon} PAPER {side.upper()} {_short(symbol)} @ ${_f(price)}"
+    if config.TRAIL_ON:
+        return (f"{head}\nstop ${_f(stop)} ({_pc(config.STOP_PCT)}) | "
+                f"trailing: arm at +{_pc(config.TRAIL_ACTIVATE_PCT)}, "
+                f"then {_pc(config.TRAIL_DISTANCE_PCT)} off peak | size ${_f(size_usd)}")
+    return f"{head}\nstop ${_f(stop)} | target ${_f(target)} | size ${_f(size_usd)}"
 
 
 def _close(pf, symbol, pos, exit_price, reason, ts):
@@ -52,7 +61,7 @@ def _close(pf, symbol, pos, exit_price, reason, ts):
     del pf["open"][symbol]
     icon = "✅" if pnl >= 0 else "❌"
     reason_txt = {"stop": "stop-loss", "target": "target hit",
-                  "flip": "opposite signal"}.get(reason, reason)
+                  "trail": "trailing stop", "flip": "opposite signal"}.get(reason, reason)
     sign = "+" if pnl >= 0 else "-"
     return (f"{icon} PAPER {_short(symbol)} {side} closed ({reason_txt})\n"
             f"{pnl_pct:+.2f}% | {sign}${_f(abs(pnl))} | equity ${_f(pf['equity'])}")
@@ -60,23 +69,47 @@ def _close(pf, symbol, pos, exit_price, reason, ts):
 
 def _check_exit(pf, symbol, pos, price, hi, lo, signal, ts):
     """Return a close-event string if the position should exit, else None.
-    Stop is checked before target (conservative on an ambiguous candle)."""
-    side = pos["side"]
+    Handles the trailing stop when TRAIL_ON; stop is checked before target."""
+    side, entry = pos["side"], pos["entry"]
     exit_price = reason = None
-    if side == "long":
-        if lo <= pos["stop"]:
-            exit_price, reason = pos["stop"], "stop"
-        elif hi >= pos["target"]:
-            exit_price, reason = pos["target"], "target"
-        elif signal == "SELL":
+
+    # track the best price reached since entry
+    pos["peak"] = max(pos.get("peak", entry), hi) if side == "long" \
+        else min(pos.get("peak", entry), lo)
+
+    if config.TRAIL_ON:
+        # arm the trailing stop once profit reaches the activation threshold
+        if not pos.get("trail_active"):
+            armed = (pos["peak"] >= entry * (1 + config.TRAIL_ACTIVATE_PCT)) if side == "long" \
+                else (pos["peak"] <= entry * (1 - config.TRAIL_ACTIVATE_PCT))
+            pos["trail_active"] = bool(armed)
+        # once armed, the stop trails the peak (locking in profit)
+        if pos["trail_active"]:
+            pos["stop"] = pos["peak"] * (1 - config.TRAIL_DISTANCE_PCT) if side == "long" \
+                else pos["peak"] * (1 + config.TRAIL_DISTANCE_PCT)
+        hit = (lo <= pos["stop"]) if side == "long" else (hi >= pos["stop"])
+        if hit:
+            exit_price = pos["stop"]
+            reason = "trail" if pos["trail_active"] else "stop"
+        elif (signal == "SELL" and side == "long") or (signal == "BUY" and side == "short"):
             exit_price, reason = price, "flip"
-    else:  # short
-        if hi >= pos["stop"]:
-            exit_price, reason = pos["stop"], "stop"
-        elif lo <= pos["target"]:
-            exit_price, reason = pos["target"], "target"
-        elif signal == "BUY":
-            exit_price, reason = price, "flip"
+    else:
+        # fixed stop + target
+        if side == "long":
+            if lo <= pos["stop"]:
+                exit_price, reason = pos["stop"], "stop"
+            elif hi >= pos["target"]:
+                exit_price, reason = pos["target"], "target"
+            elif signal == "SELL":
+                exit_price, reason = price, "flip"
+        else:
+            if hi >= pos["stop"]:
+                exit_price, reason = pos["stop"], "stop"
+            elif lo <= pos["target"]:
+                exit_price, reason = pos["target"], "target"
+            elif signal == "BUY":
+                exit_price, reason = price, "flip"
+
     if exit_price is None:
         return None
     return _close(pf, symbol, pos, exit_price, reason, ts)

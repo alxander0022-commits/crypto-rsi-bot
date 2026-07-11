@@ -21,10 +21,14 @@ coin to `ledger.csv` and reads any `/buy` `/sell` commands you sent.
 
 **Paper auto-trader (simulated money — never touches an exchange):** each hour,
 after the signals, it opens a simulated LONG on 🟢 BUY / SHORT on 🔴 SELL (20% of
-paper equity, 2% stop, 3% target), manages exits (stop / target / opposite
-signal) against the latest 1h candle, books P&L into a virtual account, logs
-closed trades to `trades.csv`, and Telegrams each open/close. Toggle with
-`PAPER_TRADING`. **This has no exchange connection and cannot touch real money.**
+paper equity), protects it with a 2% stop-loss, then rides winners with a
+**trailing stop** — once a trade is +5% it trails 4% below the best price, so it
+keeps running while the trend holds and exits on a reversal (locking in ~1%
+once armed). It books P&L into a virtual account, logs closed trades to
+`trades.csv`, and Telegrams each open/close. All levels are configurable
+(`STOP_PCT`, `TRAIL_ACTIVATE_PCT`, `TRAIL_DISTANCE_PCT`; set `TRAIL_ON = False`
+for a fixed `TARGET_PCT` take-profit instead). Toggle the whole thing with
+`PAPER_TRADING`. **No exchange connection — cannot touch real money.**
 
 **Web dashboard:** a free GitHub Pages site
 (`https://alxander0022-commits.github.io/crypto-rsi-bot/`) shows live signals,

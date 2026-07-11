@@ -36,7 +36,9 @@ def write(state, coins):
         open_list.append({
             "symbol": sym, "short": sym.replace("USDT", ""), "side": pos["side"],
             "entry": round(pos["entry"], 2), "price": round(px, 2),
-            "stop": round(pos["stop"], 2), "target": round(pos["target"], 2),
+            "stop": round(pos["stop"], 2),
+            "target": round(pos["target"], 2) if pos.get("target") is not None else None,
+            "trail_active": pos.get("trail_active", False),
             "size_usd": round(pos.get("size_usd", 0), 2),
             "upnl": round(upnl, 2), "upnl_pct": round(upct, 2),
             "opened": pos["opened"],

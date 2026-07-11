@@ -99,7 +99,9 @@ async function load(){
   const oh = '<tr><th>Coin</th><th>Side</th><th>Entry</th><th>Now</th><th>Stop</th><th>Target</th><th>P&L</th></tr>';
   ot.innerHTML = oh + ((p.open||[]).map(o=>`<tr><td>${o.short}</td>
      <td class="${o.side==='long'?'green':'red'}">${o.side}</td>
-     <td>${money(o.entry)}</td><td>${money(o.price)}</td><td>${money(o.stop)}</td><td>${money(o.target)}</td>
+     <td>${money(o.entry)}</td><td>${money(o.price)}</td>
+     <td>${money(o.stop)}${o.trail_active?' 🔒':''}</td>
+     <td>${o.target==null?'<span class="mut">trailing</span>':money(o.target)}</td>
      <td class="${cls(o.upnl)}">${sign(o.upnl_pct)}%</td></tr>`).join('')
      || '<tr><td colspan="7" class="mut">no open positions</td></tr>');
 
