@@ -1,0 +1,15 @@
+[Unit]
+Description=Crypto trading engine + control panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trader
+WorkingDirectory=/opt/trading
+ExecStart=/opt/trading/venv/bin/uvicorn server.app:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

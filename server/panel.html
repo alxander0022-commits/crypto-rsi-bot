@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading Control Panel</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --fg:#e6edf3; --mut:#8b949e;
+          --green:#3fb950; --red:#f85149; --amber:#d29922; --blue:#58a6ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:18px; }
+  h1 { font-size:20px; margin:0; }
+  .sub { color:var(--mut); font-size:13px; margin-top:4px; }
+  .grid { display:grid; gap:12px; }
+  .cards { grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .k { color:var(--mut); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .v { font-size:22px; font-weight:700; margin-top:4px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .green{color:var(--green);} .red{color:var(--red);} .amber{color:var(--amber);} .mut{color:var(--mut);}
+  .banner { padding:8px 14px; border-radius:10px; font-weight:700; letter-spacing:.06em; }
+  .banner.demo { background:#12261a; color:var(--green); border:1px solid var(--green); }
+  .banner.live { background:#2b1517; color:var(--red); border:1px solid var(--red); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:right; padding:8px 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; }
+  .sec { margin-top:22px; }
+  .sec h2 { font-size:14px; color:var(--mut); text-transform:uppercase; letter-spacing:.05em; margin:0 0 8px; }
+  .scroll { overflow-x:auto; }
+  label { display:block; color:var(--mut); font-size:12px; margin:10px 0 4px; }
+  input[type=text], input[type=number], input[type=password] {
+    width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--line);
+    border-radius:8px; padding:9px 10px; font-size:14px; }
+  button { border:0; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:600;
+           cursor:pointer; background:var(--blue); color:#0d1117; }
+  button.danger { background:var(--red); color:#fff; }
+  button.ghost { background:var(--card); color:var(--fg); border:1px solid var(--line); }
+  .msg { font-size:13px; margin-top:8px; min-height:18px; }
+  .settings-grid { display:grid; gap:0 16px; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); }
+  #panel { display:none; }
+  .center { max-width:360px; margin:12vh auto 0; }
+  .hide { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="login" class="center card">
+    <h1>🔐 Trading Panel</h1>
+    <label>Password</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <div style="margin-top:12px"><button onclick="login()">Log in</button></div>
+    <div id="loginmsg" class="msg red"></div>
+  </div>
+
+  <div id="panel">
+    <div class="row">
+      <div><h1>⚙️ Trading Control Panel</h1><div class="sub" id="sub"></div></div>
+      <div id="mode" class="banner demo">DEMO</div>
+    </div>
+
+    <div class="grid cards sec" id="tiles"></div>
+
+    <div class="sec"><h2>Signals (last hourly check)</h2><div class="grid cards" id="signals"></div></div>
+
+    <div class="sec"><h2>Open positions (protection lives on Bybit)</h2>
+      <div class="card scroll"><table id="pos"><tbody></tbody></table></div></div>
+
+    <div class="sec">
+      <h2>Controls</h2>
+      <div class="card">
+        <div class="row">
+          <button id="pausebtn" class="ghost" onclick="togglePause()">…</button>
+          <button class="danger" onclick="stopAll()">🛑 STOP ALL — close everything &amp; pause</button>
+        </div>
+        <div id="ctlmsg" class="msg"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>Settings (engine applies them on its next cycle)</h2>
+      <div class="card">
+        <div class="settings-grid">
+          <div><label>Allocated capital (USDT) — the only money the bot may use</label>
+            <input id="allocated_capital" type="number" step="any"></div>
+          <div><label>% of capital per trade (0.20 = 20%)</label>
+            <input id="trade_fraction" type="number" step="any"></div>
+          <div><label>Stop-loss % (0.02 = 2%)</label>
+            <input id="stop_pct" type="number" step="any"></div>
+          <div><label>Trailing: arm at profit % (0.05 = 5%)</label>
+            <input id="trail_activate_pct" type="number" step="any"></div>
+          <div><label>Trailing: distance off peak % (0.04 = 4%)</label>
+            <input id="trail_distance_pct" type="number" step="any"></div>
+          <div><label>RSI buy level</label><input id="rsi_buy" type="number" step="any"></div>
+          <div><label>RSI sell level</label><input id="rsi_sell" type="number" step="any"></div>
+          <div><label>Max open positions</label><input id="max_positions" type="number"></div>
+          <div><label>Max daily loss % of capital (kill switch)</label>
+            <input id="max_daily_loss_pct" type="number" step="any"></div>
+          <div><label>Symbols (comma-separated)</label><input id="symbols" type="text"></div>
+        </div>
+        <div style="margin-top:14px"><button onclick="saveSettings()">💾 Save settings</button></div>
+        <div id="setmsg" class="msg"></div>
+      </div>
+    </div>
+
+    <div class="sec" id="golivebox">
+      <h2>Live mode</h2>
+      <div class="card">
+        <div id="golivetxt" class="mut" style="font-size:13px"></div>
+        <div class="row" style="margin-top:8px">
+          <input id="goliveconfirm" type="text" placeholder='type GO-LIVE' style="max-width:200px">
+          <button class="danger" onclick="goLive()">Confirm live trading</button>
+        </div>
+        <div id="golivemsg" class="msg"></div>
+      </div>
+    </div>
+
+    <div class="sec"><h2>Closed trades</h2>
+      <div class="card scroll"><table id="trades"><tbody></tbody></table></div></div>
+
+    <div class="sub" style="margin-top:24px;text-align:center">
+      Every position carries an exchange-native stop-loss and trailing stop —
+      protection stays on Bybit even if this server goes down.
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const money = n => n==null ? '—' : (n<0?'-':'') + '$' + Math.abs(+n).toLocaleString(undefined,{maximumFractionDigits:2});
+const cls = n => n>0?'green':(n<0?'red':'mut');
+const NUM_FIELDS = ["allocated_capital","trade_fraction","stop_pct","trail_activate_pct",
+  "trail_distance_pct","rsi_buy","rsi_sell","max_positions","max_daily_loss_pct"];
+
+async function api(path, body){
+  const r = await fetch(path, body ? {method:'POST', headers:{'Content-Type':'application/json'},
+                                      body: JSON.stringify(body)} : {});
+  const d = await r.json().catch(()=>({}));
+  if (r.status === 401 && path !== '/api/login') { show(false); throw new Error('auth'); }
+  if (!r.ok) throw new Error(d.error || r.status);
+  return d;
+}
+function show(loggedIn){
+  $('#login').style.display = loggedIn ? 'none' : 'block';
+  $('#panel').style.display = loggedIn ? 'block' : 'none';
+}
+async function login(){
+  try { await api('/api/login', {password: $('#pw').value}); show(true); refresh(); }
+  catch(e){ $('#loginmsg').textContent = 'Wrong password'; }
+}
+$('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+let settingsLoaded = false;
+function tile(k,v,c){ return `<div class="card"><div class="k">${k}</div><div class="v ${c||''}">${v}</div></div>`; }
+
+async function refresh(){
+  let d;
+  try { d = await api('/api/status'); } catch(e){ return; }
+  show(true);
+  const st = d.status || {}, s = d.settings || {};
+
+  $('#mode').className = 'banner ' + d.mode;
+  $('#mode').textContent = d.mode.toUpperCase() + (s.paused ? ' · PAUSED' : '');
+  $('#sub').textContent = 'engine: ' + (st.time || 'starting…') +
+      (st.last_error ? ' · ⚠ ' + st.last_error : '');
+
+  $('#tiles').innerHTML =
+    tile('Account equity', money(st.equity)) +
+    tile("Today's P&L", money(st.pnl_today), cls(st.pnl_today)) +
+    tile('Open positions', (st.positions||[]).length) +
+    tile('Total P&L', money((d.stats||{}).total_pnl), cls((d.stats||{}).total_pnl)) +
+    tile('Win rate', d.stats && d.stats.n_trades ? d.stats.win_rate + '%' : '—');
+
+  $('#signals').innerHTML = (d.signals||[]).map(c => c.error
+    ? `<div class="card"><b>${c.symbol}</b><div class="red">error</div></div>`
+    : `<div class="card"><div class="row"><b>${c.symbol.replace('USDT','')}</b>
+        <span class="mut">${c.trend}</span></div>
+        <div class="v">RSI ${c.rsi}</div>
+        <div class="${c.signal==='BUY'?'green':(c.signal==='SELL'?'red':'mut')}">${
+          c.signal==='NONE' ? '⛔ stay out' : (c.signal==='BUY'?'🟢 BUY':'🔴 SELL')}</div></div>`
+  ).join('') || '<div class="mut">waiting for the first hourly check…</div>';
+
+  const ph = '<tr><th>Symbol</th><th>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Stop</th><th>Trailing</th><th>uP&L</th></tr>';
+  $('#pos tbody').innerHTML = ph + ((st.positions||[]).map(p=>`<tr>
+    <td>${p.symbol}</td><td class="${p.side==='Buy'?'green':'red'}">${p.side==='Buy'?'LONG':'SHORT'}</td>
+    <td>${p.size}</td><td>${money(p.entry)}</td><td>${money(p.mark)}</td>
+    <td>${p.sl && +p.sl ? money(p.sl) : '—'}</td>
+    <td>${p.trailing && +p.trailing ? money(p.trailing)+' 🔒' : '—'}</td>
+    <td class="${cls(+p.upnl)}">${money(p.upnl)}</td></tr>`).join('')
+    || '<tr><td colspan="8" class="mut">no open positions</td></tr>');
+
+  const th = '<tr><th>Closed</th><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>P&L</th></tr>';
+  $('#trades tbody').innerHTML = th + ((d.trades||[]).map(t=>`<tr>
+    <td class="mut">${(t.closed_at||'').slice(5,16)}</td><td>${t.symbol}</td>
+    <td class="${t.side==='Buy'?'green':'red'}">${t.side==='Buy'?'long':'short'}</td>
+    <td>${money(t.entry)}</td><td>${money(t.exit_price)}</td>
+    <td class="${cls(t.pnl)}">${money(t.pnl)}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="mut">no closed trades yet</td></tr>');
+
+  $('#pausebtn').textContent = s.paused ? '▶ Resume trading' : '⏸ Pause (no new trades)';
+  $('#pausebtn').dataset.paused = s.paused ? '1' : '0';
+
+  const liveBox = $('#golivebox');
+  if (d.mode === 'live' && !s.live_confirmed) {
+    liveBox.classList.remove('hide');
+    $('#golivetxt').textContent = 'Server is configured for LIVE trading but not yet confirmed. ' +
+      'The engine will not place any live order until you type GO-LIVE below.';
+  } else if (d.mode === 'live') {
+    liveBox.classList.remove('hide');
+    $('#golivetxt').textContent = '✅ Live trading confirmed.';
+  } else {
+    liveBox.classList.add('hide');
+  }
+
+  if (!settingsLoaded) {
+    NUM_FIELDS.forEach(k => { $('#'+k).value = s[k]; });
+    $('#symbols').value = (s.symbols||[]).join(', ');
+    settingsLoaded = true;
+  }
+}
+
+async function saveSettings(){
+  const body = {};
+  NUM_FIELDS.forEach(k => body[k] = parseFloat($('#'+k).value));
+  body.symbols = $('#symbols').value.split(',').map(x=>x.trim()).filter(Boolean);
+  try { const r = await api('/api/settings', body);
+        $('#setmsg').textContent = '✅ saved'; $('#setmsg').className='msg green'; }
+  catch(e){ $('#setmsg').textContent = '✗ ' + e.message; $('#setmsg').className='msg red'; }
+}
+async function togglePause(){
+  const paused = $('#pausebtn').dataset.paused === '1';
+  await api('/api/settings', {paused: !paused});
+  settingsLoaded = false; refresh();
+}
+async function stopAll(){
+  if (!confirm('Close ALL open positions at market and pause trading?')) return;
+  try { const r = await api('/api/stopall', {});
+        $('#ctlmsg').textContent = '🛑 closed: ' + (r.closed.join(', ') || 'nothing was open');
+        $('#ctlmsg').className = 'msg amber'; refresh(); }
+  catch(e){ $('#ctlmsg').textContent = '✗ ' + e.message; $('#ctlmsg').className='msg red'; }
+}
+async function goLive(){
+  try { await api('/api/golive', {confirm: $('#goliveconfirm').value.trim()});
+        $('#golivemsg').textContent = '✅ live trading confirmed'; $('#golivemsg').className='msg green';
+        refresh(); }
+  catch(e){ $('#golivemsg').textContent = '✗ ' + e.message; $('#golivemsg').className='msg red'; }
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

@@ -3,6 +3,10 @@ bot.log
 news.log
 news_log.txt
 
+# trading server — secrets & local db (NEVER commit)
+server/.env
+server/tradebot.db
+
 # python
 __pycache__/
 *.pyc
