@@ -17,3 +17,8 @@ venv/
 # The GitHub Action commits them back so your position + paper record
 # persist across hourly runs. If you run only locally, you can add them
 # here to keep them out of git.
+
+server/run_panel.bat
+server/panel.log
+
+research/data/
