@@ -114,9 +114,12 @@ async function load(){
      || '<tr><td colspan="7" class="mut">no closed trades yet</td></tr>');
 
   const st = d.settings;
+  const exit = st.trail_on
+    ? `trailing stop (arm +${st.trail_activate_pct}%, trail ${st.trail_distance_pct}% off peak)`
+    : `${st.target_pct}% target`;
   $('#foot').innerHTML = `Simulated money only — this bot never places real trades.<br>
      Strategy: trend + RSI reversal · buy&lt;${st.rsi_buy} / sell&gt;${st.rsi_sell} ·
-     ${st.stop_pct}% stop · ${st.target_pct}% target · ${st.trade_fraction}% per trade · start ${money(p.start)}`;
+     ${st.stop_pct}% stop · ${exit} · ${st.trade_fraction}% per trade · start ${money(p.start)}`;
 }
 load();
 setInterval(load, 120000); // refresh every 2 min

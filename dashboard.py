@@ -73,6 +73,9 @@ def write(state, coins):
             "stop_pct": round(config.STOP_PCT * 100, 1),
             "target_pct": round(config.TARGET_PCT * 100, 1),
             "trade_fraction": round(config.TRADE_FRACTION * 100, 1),
+            "trail_on": config.TRAIL_ON,
+            "trail_activate_pct": round(config.TRAIL_ACTIVATE_PCT * 100, 1),
+            "trail_distance_pct": round(config.TRAIL_DISTANCE_PCT * 100, 1),
         },
     }
 
